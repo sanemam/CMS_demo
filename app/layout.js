@@ -12,7 +12,6 @@ export default function RootLayout({ children }) {
       <body className="bg-gray-100">
         <nav className="bg-white shadow-md p-4">
           <div className="container mx-auto flex justify-between items-center">
-            <Link href="/" className="text-xl font-bold text-gray-800">CMS Admin</Link>
             <div className="space-x-4">
               <Link href="/" className="text-gray-600 hover:text-gray-800">Manage</Link>
               <Link href="/add" className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Add Content</Link>

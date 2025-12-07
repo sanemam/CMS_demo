@@ -18,7 +18,7 @@ export default function EditContent() {
       .then(res => res.json())
       .then(data => {
         setTitle(data.title)
-        setText(data.text)
+        setText(data.description)
         setImage(data.image)
         setLoading(false)
       })

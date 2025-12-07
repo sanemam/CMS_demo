@@ -6,7 +6,10 @@ import { useRouter } from 'next/navigation'
 export default function AddContent() {
   const [title, setTitle] = useState('')
   const [text, setText] = useState('')
+  const [contentType, setContentType] = useState('image')
   const [image, setImage] = useState('')
+  const [externalUrl, setExternalUrl] = useState('')
+  const [platform, setPlatform] = useState('none')
   const [uploading, setUploading] = useState(false)
   const router = useRouter()
 
@@ -30,15 +33,47 @@ export default function AddContent() {
     }
   }
 
+  const isValidYouTubeUrl = (url) => {
+    if (!url) return false
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/
+    ]
+    return patterns.some(pattern => pattern.test(url))
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    // Validation
+    if (contentType === 'image' && !image) {
+      alert('Please upload an image')
+      return
+    }
+    if ((contentType === 'video' || contentType === 'post') && !externalUrl) {
+      alert('Please provide a URL')
+      return
+    }
+    if (contentType === 'video' && !isValidYouTubeUrl(externalUrl)) {
+      alert('Please provide a valid YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID)')
+      return
+    }
+
     try {
+      const payload = {
+        title,
+        text,
+        contentType,
+        ...(contentType === 'image' && { image }),
+        ...((contentType === 'video' || contentType === 'post') && { externalUrl, platform }),
+      }
+
       await fetch('/api/content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, text, image }),
+        body: JSON.stringify(payload),
       })
-      router.push('/')
+      router.push('/view')
     } catch (error) {
       alert('Failed to add content. Please try again.')
     }
@@ -59,38 +94,103 @@ export default function AddContent() {
           </div>
 
           <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            {/* Content Type Selection */}
             <div className="space-y-2">
               <label className="flex items-center text-gray-700 font-semibold text-lg">
-                <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <svg className="w-5 h-5 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
-                Image
+                Content Type
               </label>
-              <div className="relative">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-                {uploading && (
-                  <div className="absolute right-3 top-3">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <select
+                value={contentType}
+                onChange={(e) => {
+                  setContentType(e.target.value)
+                  setImage('')
+                  setExternalUrl('')
+                }}
+                className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all duration-200 text-lg"
+              >
+                <option value="image">Image</option>
+                <option value="video">Video (YouTube, etc.)</option>
+                <option value="post">Social Media Post</option>
+              </select>
+            </div>
+
+            {/* Image Upload */}
+            {contentType === 'image' && (
+              <div className="space-y-2">
+                <label className="flex items-center text-gray-700 font-semibold text-lg">
+                  <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Image
+                </label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  {uploading && (
+                    <div className="absolute right-3 top-3">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  )}
+                </div>
+                {image && (
+                  <div className="mt-4 relative group">
+                    <img src={image} alt="Preview" className="w-full h-48 object-cover rounded-xl shadow-lg" />
                   </div>
                 )}
               </div>
-              {image && (
-                <div className="mt-4 relative group">
-                  <img src={image} alt="Preview" className="w-full h-48 object-cover rounded-xl shadow-lg" />
-                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 rounded-xl flex items-center justify-center">
-                    <svg className="w-12 h-12 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            )}
+
+            {/* External URL Input */}
+            {(contentType === 'video' || contentType === 'post') && (
+              <>
+                <div className="space-y-2">
+                  <label className="flex items-center text-gray-700 font-semibold text-lg">
+                    <svg className="w-5 h-5 mr-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.658 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                     </svg>
-                  </div>
+                    URL
+                  </label>
+                  <input
+                    type="url"
+                    value={externalUrl}
+                    onChange={(e) => setExternalUrl(e.target.value)}
+                    className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all duration-200 text-lg"
+                    placeholder={contentType === 'video' ? "Paste YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID)" : "Paste Instagram, Facebook, or TikTok URL..."}
+                    required={contentType !== 'image'}
+                  />
                 </div>
-              )}
-            </div>
+
+                {contentType === 'post' && (
+                  <div className="space-y-2">
+                    <label className="flex items-center text-gray-700 font-semibold text-lg">
+                      <svg className="w-5 h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4" />
+                      </svg>
+                      Platform
+                    </label>
+                    <select
+                      value={platform}
+                      onChange={(e) => setPlatform(e.target.value)}
+                      className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200 text-lg"
+                    >
+                      <option value="none">None</option>
+                      <option value="youtube">YouTube</option>
+                      <option value="facebook">Facebook</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="twitter">Twitter</option>
+                      <option value="tiktok">TikTok</option>
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
 
             <div className="space-y-2">
               <label className="flex items-center text-gray-700 font-semibold text-lg">
@@ -114,21 +214,20 @@ export default function AddContent() {
                 <svg className="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Content
+                Description (Optional)
               </label>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 className="w-full p-4 border-2 border-gray-300 rounded-xl focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-lg resize-vertical min-h-[120px]"
                 placeholder="Write your amazing content here..."
-                required
               />
             </div>
 
             <div className="flex space-x-4 pt-6">
               <button
                 type="button"
-                onClick={() => router.push('/')}
+                onClick={() => router.push('/view')}
                 className="flex-1 bg-gray-200 text-gray-800 px-6 py-3 rounded-xl hover:bg-gray-300 transition-colors duration-200 font-semibold flex items-center justify-center"
               >
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

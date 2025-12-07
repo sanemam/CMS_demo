@@ -1,10 +1,34 @@
 import supabase from '../../../../lib/supabase';
 import { readContents, writeContents } from '../../../../lib/storage';
-import { query as dbQuery } from '../../../../lib/db'
+import db from '../../../../lib/db'
 
 export async function GET(request, { params }) {
   try {
-    // If Supabase is configured, try it first (fastest)
+    // If a direct DB connection string is provided, use it server-side
+    if (db && process.env.SUPABASE_DB_URL) {
+      try {
+        const res = await db.query('SELECT id, title, description, contenttype, image, externalurl, platform, "createdAt", "updatedAt" FROM public.contents WHERE id = $1', [params.id])
+        const row = res.rows && res.rows[0] ? res.rows[0] : null
+        if (row) {
+          const mapped = {
+            id: row.id,
+            title: row.title,
+            description: row.description ?? row.text ?? null,
+            contentType: row.contenttype ?? null,
+            image: row.image ?? null,
+            externalUrl: row.externalurl ?? null,
+            platform: row.platform ?? null,
+            createdAt: row.createdAt ?? null,
+            updatedAt: row.updatedAt ?? null,
+          }
+          return new Response(JSON.stringify(mapped), { status: 200 })
+        }
+      } catch (err) {
+        console.error('Direct DB GET failed, falling back to supabase:', err.message || err)
+      }
+    }
+
+    // If Supabase is configured, try it first
     if (supabase) {
       try {
         const { data, error } = await supabase
@@ -12,7 +36,7 @@ export async function GET(request, { params }) {
           .select('*')
           .eq('id', params.id)
           .single();
-
+        
         if (error) {
           console.error('Supabase GET error:', error);
           throw error;
@@ -32,31 +56,7 @@ export async function GET(request, { params }) {
           return new Response(JSON.stringify(out), { status: 200 });
         }
       } catch (supabaseError) {
-        console.error('Supabase connection failed, falling back to direct DB:', supabaseError.message);
-      }
-    }
-
-    // If a direct DB connection string is provided, use it server-side
-    if (dbQuery && process.env.SUPABASE_DB_URL) {
-      try {
-        const res = await dbQuery('SELECT id, title, description, contenttype, image, externalurl, platform, "createdAt", "updatedAt" FROM public.contents WHERE id = $1', [params.id])
-        const row = res.rows && res.rows[0] ? res.rows[0] : null
-        if (row) {
-          const mapped = {
-            id: row.id,
-            title: row.title,
-            description: row.description ?? row.text ?? null,
-            contentType: row.contenttype ?? null,
-            image: row.image ?? null,
-            externalUrl: row.externalurl ?? null,
-            platform: row.platform ?? null,
-            createdAt: row.createdAt ?? null,
-            updatedAt: row.updatedAt ?? null,
-          }
-          return new Response(JSON.stringify(mapped), { status: 200 })
-        }
-      } catch (err) {
-        console.error('Direct DB GET failed, falling back to local storage:', err.message || err)
+        console.error('Supabase connection failed, falling back to local storage:', supabaseError.message);
       }
     }
 
@@ -75,77 +75,41 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
   try {
     let body = await request.json();
-
-    // First, fetch the existing content to preserve fields not provided in the update
-    let existingContent = null;
-
-    // Try to get existing content from DB first
-    if (dbQuery && process.env.SUPABASE_DB_URL) {
-      try {
-        const res = await dbQuery('SELECT contenttype, externalurl, platform FROM public.contents WHERE id = $1', [params.id]);
-        const row = res.rows && res.rows[0];
-        if (row) {
-          existingContent = {
-            contentType: row.contenttype,
-            externalUrl: row.externalurl,
-            platform: row.platform,
-          };
-        }
-      } catch (err) {
-        console.error('Direct DB fetch for existing content failed:', err.message);
-      }
-    }
-
-    if (!existingContent && supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('contents')
-          .select('contentType, contenttype, externalUrl, externalurl, platform')
-          .eq('id', params.id)
-          .single();
-
-        if (!error && data) {
-          existingContent = {
-            contentType: data.contentType || data.contenttype,
-            externalUrl: data.externalUrl || data.externalurl,
-            platform: data.platform,
-          };
-        }
-      } catch (supabaseError) {
-        console.error('Supabase fetch for existing content failed:', supabaseError.message);
-      }
-    }
-
-    if (!existingContent) {
-      // Fallback to local storage
-      const contents = await readContents();
-      const content = contents.find(c => c.id === params.id || c._id === params.id);
-      if (content) {
-        existingContent = {
-          contentType: content.contentType,
-          externalUrl: content.externalUrl,
-          platform: content.platform,
-        };
-      }
-    }
-
+    
     // Use exact column names as defined in Supabase
     const mappedBody = {
       title: body.title,
       description: body.text || body.description,
-      contentType: body.contentType !== undefined ? body.contentType : (existingContent ? existingContent.contentType : null),
+      contentType: body.contentType,
       image: body.image || null,
-      externalUrl: body.externalUrl !== undefined ? body.externalUrl : (existingContent ? existingContent.externalUrl : null),
-      platform: body.platform !== undefined ? body.platform : (existingContent ? existingContent.platform : null),
+      externalUrl: body.externalUrl || null,
+      platform: body.platform || null,
     };
 
     // If a direct DB connection string is provided, use it server-side for updates
-    if (dbQuery && process.env.SUPABASE_DB_URL) {
+    if (db && process.env.SUPABASE_DB_URL) {
       try {
+        // First, get the existing content to preserve contentType
+        const getRes = await db.query('SELECT contenttype FROM public.contents WHERE id = $1', [params.id])
+        const existingRow = getRes.rows && getRes.rows[0] ? getRes.rows[0] : null
+        
+        if (!existingRow) {
+          return new Response(JSON.stringify({ error: 'Content not found' }), { status: 404 });
+        }
+
         const now = new Date()
         const sql = `UPDATE public.contents SET title = $1, description = $2, contenttype = $3, image = $4, externalurl = $5, platform = $6, "updatedAt" = $7 WHERE id = $8 RETURNING *`
-        const values = [mappedBody.title, mappedBody.description, mappedBody.contentType, mappedBody.image, mappedBody.externalUrl, mappedBody.platform, now, params.id]
-        const res = await dbQuery(sql, values)
+        const values = [
+          mappedBody.title, 
+          mappedBody.description, 
+          existingRow.contenttype,  // Use existing contenttype
+          mappedBody.image, 
+          mappedBody.externalUrl, 
+          mappedBody.platform, 
+          now, 
+          params.id
+        ]
+        const res = await db.query(sql, values)
         const row = res.rows && res.rows[0] ? res.rows[0] : null
         if (row) {
           const response = {
@@ -227,11 +191,11 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     // If a direct DB connection string is provided, use it server-side for deletes
-    if (dbQuery && process.env.SUPABASE_DB_URL) {
+    if (db && process.env.SUPABASE_DB_URL) {
       try {
         const sql = `DELETE FROM public.contents WHERE id = $1`
         const values = [params.id]
-        const res = await dbQuery(sql, values)
+        const res = await db.query(sql, values)
         return new Response(JSON.stringify({ message: 'Content deleted' }), { status: 200 })
       } catch (err) {
         console.error('Direct DB DELETE failed, falling back to supabase:', err.message || err)
@@ -255,9 +219,9 @@ export async function DELETE(request, { params }) {
     if (index === -1) {
       return new Response(JSON.stringify({ error: 'Content not found' }), { status: 404 });
     }
-    contents.splice(index, 1);
+    1);
     await writeContents(contents);
-    return new Response(JSON.stringify({ message: 'Content deleted' }), { status: 200 });
+    return contents.splice(index, new Response(JSON.stringify({ message: 'Content deleted' }), { status: 200 });
   } catch (error) {
     return new Response(JSON.stringify({ error: 'Failed to delete content' }), { status: 500 });
   }

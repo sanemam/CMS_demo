@@ -7,11 +7,26 @@ const ContentSchema = new mongoose.Schema({
   },
   text: {
     type: String,
-    required: true,
   },
-  image: {
-    type: String, // url from Cloudinary
+  contentType: {
+    type: String,
+    enum: ['image', 'video', 'post'],
     required: true,
+    default: 'image',
+  },
+  // For images
+  image: {
+    type: String, // url from local upload or Cloudinary
+  },
+  // For videos and social media posts
+  externalUrl: {
+    type: String, // URL from YouTube, Facebook, Instagram, etc.
+  },
+  // Metadata for social media
+  platform: {
+    type: String,
+    enum: ['youtube', 'facebook', 'instagram', 'twitter', 'tiktok', 'none'],
+    default: 'none',
   },
   createdAt: {
     type: Date,
