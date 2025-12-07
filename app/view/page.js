@@ -33,8 +33,9 @@ export default function PublicView() {
         if (response.ok) {
           const data = await response.json()
           console.log('Auth response data:', data)
-          setIsAuthenticated(data.authenticated === true)
-          console.log('Setting isAuthenticated to:', data.authenticated === true)
+          const authStatus = data.authenticated === true
+          console.log('Setting isAuthenticated to:', authStatus)
+          setIsAuthenticated(authStatus)
         } else {
           console.log('Auth response not ok, setting false')
           setIsAuthenticated(false)
@@ -47,6 +48,9 @@ export default function PublicView() {
 
     checkAuth()
   }, [])
+
+  // Debug render
+  console.log('Rendering with isAuthenticated:', isAuthenticated)
 
   useEffect(() => {
     fetch('/api/content')
@@ -189,18 +193,6 @@ export default function PublicView() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
                 Add New Content
-              </Link>
-            </div>
-          )}
-
-          {/* Login prompt for non-authenticated users - only show after auth check */}
-          {isAuthenticated === false && (
-            <div className="text-center mb-8">
-              <Link href="/login" className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                Admin Login
               </Link>
             </div>
           )}
