@@ -62,9 +62,15 @@ export default function AddContent() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
+    // Prevent submission if upload is in progress
+    if (uploading) {
+      alert('Please wait for the image upload to complete')
+      return
+    }
+
     // Validation
     if (contentType === 'image' && !image) {
-      alert('Please upload an image')
+      alert('Please upload an image first')
       return
     }
     if ((contentType === 'video' || contentType === 'post') && !externalUrl) {
